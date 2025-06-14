@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import { useColorScheme } from "react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
 interface ThemeContextType {
   isDark: boolean
@@ -24,12 +25,12 @@ const lightColors = {
   primary: "#007AFF",
   secondary: "#5856D6",
   background: "#FFFFFF",
-  surface: "#F2F2F7",
-  text: "#000000",
-  textSecondary: "#8E8E93",
-  border: "#C6C6C8",
-  success: "#34C759",
-  error: "#FF3B30",
+  surface: "#F8FAFC",
+  text: "#1D1D1F",
+  textSecondary: "#6B7280",
+  border: "#E5E7EB",
+  success: "#10B981",
+  error: "#EF4444",
 }
 
 const darkColors = {
@@ -38,10 +39,10 @@ const darkColors = {
   background: "#000000",
   surface: "#1C1C1E",
   text: "#FFFFFF",
-  textSecondary: "#8E8E93",
-  border: "#38383A",
-  success: "#30D158",
-  error: "#FF453A",
+  textSecondary: "#9CA3AF",
+  border: "#374151",
+  success: "#10B981",
+  error: "#EF4444",
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -50,8 +51,29 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const systemColorScheme = useColorScheme()
   const [isDark, setIsDark] = useState(systemColorScheme === "dark")
 
-  const toggleTheme = () => {
-    setIsDark(!isDark)
+  useEffect(() => {
+    loadThemePreference()
+  }, [])
+
+  const loadThemePreference = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem("theme")
+      if (savedTheme !== null) {
+        setIsDark(savedTheme === "dark")
+      }
+    } catch (error) {
+      console.error("Error loading theme preference:", error)
+    }
+  }
+
+  const toggleTheme = async () => {
+    const newTheme = !isDark
+    setIsDark(newTheme)
+    try {
+      await AsyncStorage.setItem("theme", newTheme ? "dark" : "light")
+    } catch (error) {
+      console.error("Error saving theme preference:", error)
+    }
   }
 
   const colors = isDark ? darkColors : lightColors
