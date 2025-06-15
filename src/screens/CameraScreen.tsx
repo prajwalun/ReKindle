@@ -502,8 +502,19 @@ Only include fields that are clearly visible. If a field is not present or uncle
   if (isProcessing && capturedImage) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ flex: 1, padding: 20 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
+        <View style={{ flex: 1 }}>
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              padding: 20,
+              paddingTop: 60,
+              backgroundColor: colors.background,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          >
             <TouchableOpacity onPress={retryCapture}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
@@ -512,24 +523,205 @@ Only include fields that are clearly visible. If a field is not present or uncle
             </Text>
           </View>
 
-          {/* Processing View */}
-          <Card style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Image
-              source={{ uri: capturedImage }}
-              style={{ width: 300, height: 180, borderRadius: 12, marginBottom: 30 }}
-              resizeMode="contain"
-            />
+          {/* Main Content */}
+          <View style={{ flex: 1, padding: 20 }}>
+            {/* Card Preview */}
+            <Card style={{ marginBottom: 30, padding: 0, overflow: "hidden" }}>
+              <Image
+                source={{ uri: capturedImage }}
+                style={{
+                  width: "100%",
+                  height: 200,
+                  borderRadius: 16,
+                }}
+                resizeMode="cover"
+              />
 
-            <View style={{ alignItems: "center" }}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text, marginTop: 16 }}>
-                AI Processing...
+              {/* Overlay with AI badge */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  backgroundColor: "rgba(0,0,0,0.8)",
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+                <Text style={{ color: "#FFFFFF", fontSize: 12, marginLeft: 6, fontWeight: "600" }}>AI Processing</Text>
+              </View>
+            </Card>
+
+            {/* Processing Status */}
+            <Card style={{ alignItems: "center", paddingVertical: 40 }}>
+              {/* Animated Processing Indicator */}
+              <View style={{ position: "relative", marginBottom: 24 }}>
+                <View
+                  style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    backgroundColor: colors.primary + "15",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+
+                {/* Pulsing ring */}
+                <View
+                  style={{
+                    position: "absolute",
+                    width: 100,
+                    height: 100,
+                    borderRadius: 50,
+                    borderWidth: 2,
+                    borderColor: colors.primary + "30",
+                    top: -10,
+                    left: -10,
+                  }}
+                />
+              </View>
+
+              {/* Status Text */}
+              <Text
+                style={{
+                  fontSize: 20,
+                  fontWeight: "600",
+                  color: colors.text,
+                  textAlign: "center",
+                  marginBottom: 8,
+                }}
+              >
+                Analyzing Business Card
               </Text>
-              <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: "center", marginTop: 8 }}>
-                {processingStep || "Analyzing your business card with AI"}
+
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: colors.textSecondary,
+                  textAlign: "center",
+                  marginBottom: 20,
+                  lineHeight: 22,
+                }}
+              >
+                {processingStep || "Our AI is extracting contact information..."}
               </Text>
-            </View>
-          </Card>
+
+              {/* Processing Steps */}
+              <View style={{ width: "100%", maxWidth: 280 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: colors.success,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                  </View>
+                  <Text style={{ fontSize: 14, color: colors.text, flex: 1 }}>Image captured</Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: processingStep?.includes("Analyzing") ? colors.primary : colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    {processingStep?.includes("Analyzing") ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="eye-outline" size={12} color={colors.textSecondary} />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 14, color: colors.text, flex: 1 }}>Analyzing with AI Vision</Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: processingStep?.includes("Processing") ? colors.primary : colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    {processingStep?.includes("Processing") ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="document-text-outline" size={12} color={colors.textSecondary} />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 14, color: colors.text, flex: 1 }}>Extracting contact details</Text>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: processingStep?.includes("Parsing") ? colors.primary : colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    {processingStep?.includes("Parsing") ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="person-add-outline" size={12} color={colors.textSecondary} />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 14, color: colors.text, flex: 1 }}>Preparing contact form</Text>
+                </View>
+              </View>
+            </Card>
+
+            {/* Tips Card */}
+            <Card style={{ marginTop: 20, backgroundColor: colors.primary + "10" }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: colors.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <Ionicons name="bulb-outline" size={16} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 4 }}>Pro Tip</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
+                    While we process this card, you can prepare to add conversation context about your meeting.
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </View>
         </View>
       </SafeAreaView>
     )
