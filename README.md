@@ -200,7 +200,7 @@ For additional support, please open an issue on GitHub.
 - **Analytics Dashboard** for networking insights
 - **Multi-language Support**
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **OpenAI** for GPT-4o and Whisper APIs
 - **Expo** for the amazing development platform
