@@ -141,30 +141,6 @@ An AI-powered mobile app that transforms your networking conversations into acti
 - **Expo Audio** for voice recording
 - **Expo Location** for automatic location tagging
 
-### Project Structure
-
-\`\`\`
-src/
-├── components/ # Reusable UI components
-│ ├── Button.tsx
-│ ├── Card.tsx
-│ ├── Input.tsx
-│ └── ErrorBoundary.tsx
-├── contexts/ # React contexts
-│ ├── ThemeContext.tsx
-│ └── LocationContext.tsx
-├── screens/ # App screens
-│ ├── MainScreen.tsx
-│ ├── ContactFormScreen.tsx
-│ ├── CameraScreen.tsx
-│ └── HistoryScreen.tsx
-├── utils/ # Utility functions
-│ ├── storage.ts
-│ └── clipboard.ts
-└── types/ # TypeScript type definitions
-└── index.ts
-\`\`\`
-
 ## 🔒 Privacy & Security
 
 - **Local Storage**: All contact data is stored locally on your device
@@ -231,6 +207,3 @@ For additional support, please open an issue on GitHub.
 - **React Native** community for excellent libraries
 
 ---
-
-**Made with ❤️ for better networking**
-\`\`\`
