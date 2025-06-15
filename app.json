@@ -31,7 +31,8 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "package": "com.bharatgoogle.ReKindle"
     },
     "web": {
       "favicon": "./assets/favicon.png"
