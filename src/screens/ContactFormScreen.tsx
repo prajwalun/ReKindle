@@ -11,18 +11,23 @@ import {
   Alert,
   Dimensions,
   Platform,
+  Animated,
 } from "react-native"
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import type { RouteProp } from "@react-navigation/native"
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view"
 import { Ionicons } from "@expo/vector-icons"
 import { Audio } from "expo-av"
-import * as FileSystem from "expo-file-system"
 import { useTheme } from "../contexts/ThemeContext"
+import { useLocation } from "../contexts/LocationContext"
 import { Card } from "../components/Card"
 import { Input } from "../components/Input"
 import { copyToClipboard } from "../utils/clipboard"
+import { saveContact } from "../utils/storage"
 import type { RootStackParamList, ContactData, GeneratedMessage } from "../types"
+import type { StoredContact } from "../utils/storage"
+
+declare const __DEV__: boolean
 
 type ContactFormScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "ContactForm">
 type ContactFormScreenRouteProp = RouteProp<RootStackParamList, "ContactForm">
@@ -36,6 +41,7 @@ const { height: screenHeight } = Dimensions.get("window")
 
 const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const { colors } = useTheme()
+  const { getCurrentLocation } = useLocation()
   const { contactData } = route.params || {}
 
   const [formData, setFormData] = useState<ContactData>({
@@ -55,100 +61,114 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const [generationStep, setGenerationStep] = useState("")
   const [recording, setRecording] = useState<Audio.Recording | null>(null)
   const [recordingDuration, setRecordingDuration] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
   const scrollViewRef = useRef<KeyboardAwareScrollView>(null)
-  const recordingInterval = useRef<NodeJS.Timeout | null>(null)
+  const recordingStartTime = useRef<number>(0)
+  const recordingTimeout = useRef<NodeJS.Timeout | null>(null)
+  const pulseAnim = useRef(new Animated.Value(1)).current
+  const waveAnim1 = useRef(new Animated.Value(0)).current
+  const waveAnim2 = useRef(new Animated.Value(0)).current
+  const waveAnim3 = useRef(new Animated.Value(0)).current
+
+  // Timer update function
+  const updateRecordingDuration = () => {
+    const elapsed = Math.floor((Date.now() - recordingStartTime.current) / 1000)
+    setRecordingDuration(elapsed)
+    recordingTimeout.current = setTimeout(updateRecordingDuration, 1000)
+  }
 
   useEffect(() => {
     return () => {
-      if (recordingInterval.current) {
-        clearInterval(recordingInterval.current)
+      if (recordingTimeout.current) {
+        clearTimeout(recordingTimeout.current)
+      }
+      if (recording) {
+        recording.stopAndUnloadAsync().catch(() => {})
       }
     }
-  }, [])
+  }, [recording])
 
-  const startRecording = async () => {
-    try {
-      console.log("Requesting permissions...")
-      const permissionResponse = await Audio.requestPermissionsAsync()
-      if (permissionResponse.status !== "granted") {
-        Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.")
-        return
-      }
+  const startPulseAnimation = () => {
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    )
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      })
+    const waveAnimation = Animated.loop(
+      Animated.stagger(300, [
+        Animated.sequence([
+          Animated.timing(waveAnim1, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim1, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(waveAnim2, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim2, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(waveAnim3, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveAnim3, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    )
 
-      console.log("Starting recording...")
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)
-
-      setRecording(recording)
-      setIsRecording(true)
-      setRecordingDuration(0)
-
-      // Start duration counter
-      recordingInterval.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1)
-      }, 1000)
-
-      console.log("Recording started")
-    } catch (err) {
-      console.error("Failed to start recording", err)
-      Alert.alert("Recording Error", "Failed to start recording. Please check microphone permissions.")
-    }
+    pulseAnimation.start()
+    waveAnimation.start()
   }
 
-  const stopRecording = async () => {
-    console.log("Stopping recording...")
-    setIsRecording(false)
+  const stopPulseAnimation = () => {
+    pulseAnim.stopAnimation()
+    waveAnim1.stopAnimation()
+    waveAnim2.stopAnimation()
+    waveAnim3.stopAnimation()
 
-    if (recordingInterval.current) {
-      clearInterval(recordingInterval.current)
-      recordingInterval.current = null
-    }
-
-    try {
-      await recording?.stopAndUnloadAsync()
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      })
-      const uri = recording?.getURI()
-      setRecording(null)
-
-      if (uri) {
-        setIsTranscribing(true)
-        await transcribeAudio(uri)
-      } else {
-        Alert.alert("Recording Error", "No recording URI found.")
-      }
-    } catch (error) {
-      console.error("Error stopping and unloading recording", error)
-      Alert.alert("Recording Error", "Failed to stop recording.")
-    }
+    pulseAnim.setValue(1)
+    waveAnim1.setValue(0)
+    waveAnim2.setValue(0)
+    waveAnim3.setValue(0)
   }
 
-  const transcribeAudio = async (audioUri: string) => {
+  const transcribeAudio = async (audioUri: string): Promise<string> => {
     try {
-      console.log("Starting transcription...")
-
       if (!process.env.EXPO_PUBLIC_OPENAI_API_KEY) {
-        throw new Error("OpenAI API key not found")
+        return ""
       }
 
-      // Get file info
-      const fileInfo = await FileSystem.getInfoAsync(audioUri)
-      console.log("Audio file info:", fileInfo)
-
-      if (!fileInfo.exists) {
-        throw new Error("Audio file does not exist")
-      }
-
-      // Create proper FormData
       const formData = new FormData()
-
-      // Add the audio file - the preset will determine the format
       formData.append("file", {
         uri: audioUri,
         type: "audio/m4a",
@@ -157,8 +177,6 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
 
       formData.append("model", "whisper-1")
       formData.append("language", "en")
-
-      console.log("Sending to OpenAI Whisper API...")
 
       const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
         method: "POST",
@@ -169,43 +187,111 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Whisper API Error:", errorText)
+        // Silent logging for development
+        if (__DEV__) console.log("Whisper API Error:", await response.text())
+        return ""
+      }
 
-        // Try to parse error details
-        try {
-          const errorJson = JSON.parse(errorText)
-          throw new Error(`Transcription failed: ${errorJson.error?.message || response.status}`)
-        } catch {
-          throw new Error(`Transcription failed: ${response.status} - ${errorText}`)
+      const result = await response.json()
+      return result.text || ""
+    } catch (error) {
+      // Silent logging for development
+      __DEV__ && console.log("Transcription error:", error)
+      return ""
+    }
+  }
+
+  const startRecording = async () => {
+  try {
+    const permissionResponse = await Audio.requestPermissionsAsync();
+    if (permissionResponse.status !== "granted") {
+      Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.");
+      return;
+    }
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
+    setRecording(recording);
+    setIsRecording(true);
+
+    // Start timer
+    recordingStartTime.current = Date.now();
+    setRecordingDuration(0);
+
+    // <-- ADD THIS DELAYED START
+    setTimeout(updateRecordingDuration, 500);
+
+    startPulseAnimation();
+  } catch (err) {
+    __DEV__ && console.log("Failed to start recording", err);
+    Alert.alert("Recording Error", "We couldn't start recording. Please check your microphone permissions and try again.", [{ text: "OK", style: "default" }]);
+  }
+}
+
+
+  const stopRecording = async () => {
+    setIsRecording(false)
+    stopPulseAnimation()
+
+    // Clear the timer
+    if (recordingTimeout.current) {
+      clearTimeout(recordingTimeout.current)
+      recordingTimeout.current = null
+    }
+
+    try {
+      if (recording) {
+        await recording.stopAndUnloadAsync()
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+        })
+
+        const uri = recording.getURI()
+        setRecording(null)
+
+        if (uri) {
+          setIsTranscribing(true)
+          const transcribedText = await transcribeAudio(uri)
+
+          if (transcribedText.trim()) {
+            setFormData((prev) => ({
+              ...prev,
+              conversationContext: prev.conversationContext
+                ? `${prev.conversationContext} ${transcribedText.trim()}`
+                : transcribedText.trim(),
+            }))
+
+            Alert.alert(
+              "Recording Complete",
+              "Your voice note has been transcribed and added to the conversation context.",
+              [{ text: "Continue", style: "default" }],
+            )
+          } else {
+            Alert.alert(
+              "No Speech Detected",
+              "We couldn't detect any speech in your recording. Please try again and speak clearly into the microphone.",
+              [{ text: "Try Again", style: "default" }],
+            )
+          }
+
+          setIsTranscribing(false)
         }
       }
-
-      // Parse JSON response (default format)
-      const result = await response.json()
-      const transcribedText = result.text
-
-      console.log("Transcription result:", transcribedText)
-
-      if (transcribedText && transcribedText.trim()) {
-        // Add the transcribed text to conversation context
-        setFormData((prev) => ({
-          ...prev,
-          conversationContext: prev.conversationContext
-            ? `${prev.conversationContext} ${transcribedText.trim()}`
-            : transcribedText.trim(),
-        }))
-
-        Alert.alert("✅ Transcription Complete", `Added: "${transcribedText.trim()}"`)
-      } else {
-        Alert.alert("No Speech Detected", "Please try recording again with clearer speech.")
-      }
     } catch (error) {
-      console.error("Transcription error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Unknown error"
-      Alert.alert("Transcription Failed", `Unable to transcribe: ${errorMessage}\n\nPlease try again or type manually.`)
-    } finally {
+      // Silent logging for development
+      __DEV__ && console.log("Error stopping recording", error)
+      Alert.alert("Recording Error", "There was an issue processing your recording. Please try recording again.", [
+        { text: "OK", style: "default" },
+      ])
       setIsTranscribing(false)
+    } finally {
+      // Reset duration after processing
+      setRecordingDuration(0)
     }
   }
 
@@ -228,13 +314,12 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
       setGenerationStep("Connecting to OpenAI...")
 
       if (!process.env.EXPO_PUBLIC_OPENAI_API_KEY) {
-        console.log("No OpenAI API key found, using fallback")
-        setGenerationStep("Using fallback message...")
+        setGenerationStep("Using template message...")
         await new Promise((resolve) => setTimeout(resolve, 2000))
         return `Hi ${formData.name},\n\nIt was great meeting you${formData.company ? ` at ${formData.company}` : ""}! ${formData.conversationContext ? `I enjoyed our conversation about ${formData.conversationContext.slice(0, 100)}${formData.conversationContext.length > 100 ? "..." : ""}` : "I hope we can continue our conversation soon."}\n\nI'd love to stay connected and explore potential collaboration opportunities.\n\nBest regards!`
       }
 
-      setGenerationStep("Preparing your message...")
+      setGenerationStep("Analyzing conversation context...")
 
       const prompt = `You are a professional assistant helping generate personalized networking follow-up messages.
 
@@ -264,7 +349,7 @@ Your task:
 
 Now generate the message.`
 
-      setGenerationStep("AI is analyzing your conversation...")
+      setGenerationStep("Crafting your personalized message...")
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000)
@@ -294,8 +379,9 @@ Now generate the message.`
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error("OpenAI API Error Response:", errorText)
-          throw new Error(`OpenAI API error: ${response.status} - ${errorText}`)
+          // Silent logging for development
+          __DEV__ && console.log("OpenAI API Error Response:", errorText)
+          throw new Error(`API_ERROR_${response.status}`)
         }
 
         setGenerationStep("Finalizing your message...")
@@ -304,7 +390,7 @@ Now generate the message.`
         const content = data.choices[0]?.message?.content
 
         if (!content) {
-          throw new Error("No content received from OpenAI API")
+          throw new Error("NO_CONTENT_RECEIVED")
         }
 
         return content.trim()
@@ -313,7 +399,8 @@ Now generate the message.`
         throw fetchError
       }
     } catch (error) {
-      console.error("OpenAI API Error:", error)
+      // Silent logging for development
+      __DEV__ && console.log("OpenAI API Error:", error)
       throw error
     }
   }
@@ -344,32 +431,41 @@ Now generate the message.`
         scrollViewRef.current?.scrollToEnd(true);
       }, 100)
     } catch (error) {
-      console.error("Error generating follow-up message:", error)
-      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      // Silent logging for development
+      __DEV__ && console.log("Error generating follow-up message:", error)
 
-      Alert.alert(
-        "Generation Failed",
-        `We couldn't generate your follow-up message right now.\n\nError: ${errorMessage}`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Use Template",
-            style: "default",
-            onPress: () => {
-              const fallbackMessage = `Hi ${formData.name},\n\nIt was wonderful meeting you${formData.company ? ` at ${formData.company}` : ""}! ${formData.conversationContext ? `I really enjoyed our conversation about ${formData.conversationContext.slice(0, 100)}${formData.conversationContext.length > 100 ? "..." : ""}` : "I hope we can continue our conversation soon."}\n\nI'd love to stay connected and explore potential collaboration opportunities.\n\nBest regards!`
+      const errorTitle = "Generation Failed"
+      let errorMessage = "We couldn't generate your follow-up message right now."
 
-              setGeneratedMessage({
-                message: fallbackMessage,
-                timestamp: new Date().toISOString(),
-              })
+      if (error instanceof Error) {
+        if (error.message.includes("API_ERROR")) {
+          errorMessage = "There's an issue with the AI service right now. Please try using a template message instead."
+        } else if (error.message.includes("NO_CONTENT")) {
+          errorMessage = "The AI service didn't return a response. Please try again or use a template message."
+        } else {
+          errorMessage = "Please check your internet connection and try again."
+        }
+      }
 
-              setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd(true);
-              }, 100)
-            },
+      Alert.alert(errorTitle, errorMessage, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Use Template",
+          style: "default",
+          onPress: () => {
+            const fallbackMessage = `Hi ${formData.name},\n\nIt was wonderful meeting you${formData.company ? ` at ${formData.company}` : ""}! ${formData.conversationContext ? `I really enjoyed our conversation about ${formData.conversationContext.slice(0, 100)}${formData.conversationContext.length > 100 ? "..." : ""}` : "I hope we can continue our conversation soon."}\n\nI'd love to stay connected and explore potential collaboration opportunities.\n\nBest regards!`
+
+            setGeneratedMessage({
+              message: fallbackMessage,
+              timestamp: new Date().toISOString(),
+            })
+
+            setTimeout(() => {
+              scrollViewRef.current?.scrollToEnd(true);
+            }, 100)
           },
-        ],
-      )
+        },
+      ])
     } finally {
       setIsGenerating(false)
       setGenerationStep("")
@@ -381,14 +477,63 @@ Now generate the message.`
       try {
         const success = await copyToClipboard(generatedMessage.message)
         if (success) {
-          Alert.alert("✅ Copied!", "Message copied to clipboard successfully")
+          Alert.alert("Copied", "Message copied to clipboard successfully")
         } else {
-          Alert.alert("❌ Copy Failed", "Unable to copy message to clipboard")
+          Alert.alert("Copy Failed", "Unable to copy message to clipboard")
         }
       } catch (error) {
-        console.error("Copy error:", error)
-        Alert.alert("❌ Copy Failed", "Unable to copy message to clipboard")
+        // Silent logging for development
+        __DEV__ && console.log("Copy error:", error)
+        Alert.alert("Copy Failed", "Unable to copy message to clipboard")
       }
+    }
+  }
+
+  const saveContactToHistory = async () => {
+    if (!formData.name.trim()) {
+      Alert.alert("Missing Information", "Please enter the contact's name before saving.")
+      return
+    }
+
+    setIsSaving(true)
+
+    try {
+      const location = await getCurrentLocation()
+      const contactId = Date.now().toString()
+
+      const storedContact: StoredContact = {
+        ...formData,
+        id: contactId,
+        timestamp: new Date().toISOString(),
+        location: location || undefined,
+        followUpMessage: generatedMessage?.message,
+        generatedAt: generatedMessage?.timestamp,
+      }
+
+      await saveContact(storedContact)
+
+      Alert.alert("Contact Saved", "Contact has been successfully saved to your history.", [
+        {
+          text: "View History",
+          onPress: () => {
+            navigation.reset({
+              index: 1,
+              routes: [{ name: "Main" }, { name: "History" }],
+            })
+          },
+        },
+        {
+          text: "Done",
+          style: "default",
+          onPress: () => navigation.navigate("Main"),
+        },
+      ])
+    } catch (error) {
+      // Silent logging for development
+      __DEV__ && console.log("Error saving contact:", error)
+      Alert.alert("Save Failed", "Unable to save contact. Please try again.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -477,6 +622,173 @@ Now generate the message.`
           />
         </Card>
 
+        {/* Voice Recording Section */}
+        <Card style={{ marginBottom: 20 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: colors.text,
+                flex: 1,
+              }}
+            >
+              Voice Recording
+            </Text>
+          </View>
+
+          {/* Enhanced Recording UI */}
+          <View style={{ alignItems: "center", marginBottom: 20 }}>
+            <View style={{ position: "relative", alignItems: "center", justifyContent: "center" }}>
+              {/* Animated waves */}
+              {isRecording && (
+                <>
+                  <Animated.View
+                    style={{
+                      position: "absolute",
+                      width: 120,
+                      height: 120,
+                      borderRadius: 60,
+                      backgroundColor: colors.primary + "15",
+                      opacity: waveAnim1,
+                      transform: [{ scale: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [1, 1.4] }) }],
+                    }}
+                  />
+                  <Animated.View
+                    style={{
+                      position: "absolute",
+                      width: 100,
+                      height: 100,
+                      borderRadius: 50,
+                      backgroundColor: colors.primary + "25",
+                      opacity: waveAnim2,
+                      transform: [{ scale: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] }) }],
+                    }}
+                  />
+                  <Animated.View
+                    style={{
+                      position: "absolute",
+                      width: 80,
+                      height: 80,
+                      borderRadius: 40,
+                      backgroundColor: colors.primary + "35",
+                      opacity: waveAnim3,
+                      transform: [{ scale: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] }) }],
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Main recording button */}
+              <Animated.View
+                style={{
+                  transform: [{ scale: pulseAnim }],
+                }}
+              >
+                <TouchableOpacity
+                  onPress={toggleRecording}
+                  disabled={isTranscribing}
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: isRecording ? colors.error : isTranscribing ? colors.border : colors.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 4,
+                  }}
+                >
+                  {isTranscribing ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name={isRecording ? "stop" : "mic"} size={28} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
+
+            {/* Recording status */}
+            {isRecording && (
+              <View style={{ alignItems: "center", marginTop: 16 }}>
+                <View
+                  style={{
+                    backgroundColor: colors.error + "15",
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: colors.error,
+                      marginRight: 8,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: colors.error,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Recording {formatRecordingTime(recordingDuration)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {isTranscribing && (
+              <View style={{ alignItems: "center", marginTop: 16 }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary + "15",
+                    borderRadius: 16,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: colors.primary,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Transcribing audio...
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Instructions */}
+            <Text
+              style={{
+                fontSize: 14,
+                color: colors.textSecondary,
+                textAlign: "center",
+                marginTop: 12,
+                lineHeight: 20,
+              }}
+            >
+              {isRecording
+                ? "Speak clearly about your conversation details"
+                : "Tap to record conversation notes with your voice"}
+            </Text>
+          </View>
+        </Card>
+
         {/* Conversation Context */}
         <Card style={{ marginBottom: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
@@ -490,91 +802,15 @@ Now generate the message.`
             >
               Conversation Context
             </Text>
-            <TouchableOpacity
-              onPress={toggleRecording}
-              disabled={isTranscribing}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: isRecording ? colors.error : isTranscribing ? colors.border : colors.primary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {isTranscribing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name={isRecording ? "stop" : "mic"} size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
           </View>
 
           <Input
             value={formData.conversationContext || ""}
             onChangeText={(text) => setFormData((prev) => ({ ...prev, conversationContext: text }))}
-            placeholder="What did you talk about? Include specific topics, interests, or projects discussed. You can also use the microphone to record your thoughts."
+            placeholder="What did you talk about? Include specific topics, interests, or projects discussed. Use voice recording above for hands-free input!"
             multiline
             numberOfLines={4}
           />
-
-          {isRecording && (
-            <View
-              style={{
-                backgroundColor: colors.error + "20",
-                borderRadius: 8,
-                padding: 12,
-                marginTop: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: colors.error,
-                  marginRight: 8,
-                }}
-              />
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: colors.error,
-                  fontWeight: "600",
-                }}
-              >
-                Recording... {formatRecordingTime(recordingDuration)}
-              </Text>
-            </View>
-          )}
-
-          {isTranscribing && (
-            <View
-              style={{
-                backgroundColor: colors.primary + "20",
-                borderRadius: 8,
-                padding: 12,
-                marginTop: 12,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: colors.primary,
-                  fontWeight: "600",
-                }}
-              >
-                Transcribing your voice note...
-              </Text>
-            </View>
-          )}
         </Card>
 
         {/* AI Generation Info */}
@@ -599,8 +835,8 @@ Now generate the message.`
             </View>
           </View>
           <Text style={{ fontSize: 14, color: colors.textSecondary, lineHeight: 20 }}>
-            Use voice recording or type to describe your conversation. Our AI will generate a personalized, professional
-            follow-up message that references your specific discussion points.
+            Use voice recording for hands-free input or type to describe your conversation. Our AI will generate a
+            personalized, professional follow-up message that references your specific discussion points.
           </Text>
         </Card>
 
@@ -718,7 +954,7 @@ Now generate the message.`
               </Text>
             </View>
 
-            <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+            <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               {/* Copy Button */}
               <TouchableOpacity
                 onPress={handleCopyToClipboard}
@@ -757,6 +993,30 @@ Now generate the message.`
                 <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text, marginLeft: 6 }}>Regenerate</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Save to History Button */}
+            <TouchableOpacity
+              onPress={saveContactToHistory}
+              disabled={isSaving}
+              style={{
+                backgroundColor: colors.success,
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                borderRadius: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              ) : (
+                <Ionicons name="bookmark-outline" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+              )}
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
+                {isSaving ? "Saving..." : "Save to History"}
+              </Text>
+            </TouchableOpacity>
 
             <Text
               style={{

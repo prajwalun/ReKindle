@@ -12,6 +12,8 @@ import { useTheme } from "../contexts/ThemeContext"
 import { Card } from "../components/Card"
 import type { RootStackParamList, ContactData } from "../types"
 
+declare const __DEV__: boolean
+
 type CameraScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Camera">
 
 interface Props {
@@ -40,20 +42,13 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
   const cameraRef = useRef<CameraView>(null)
 
   const handleRequestPermission = async () => {
-    console.log("Permission request started...")
-
     try {
       setIsRequestingPermission(true)
-
-      // Add a small delay to show the loading state
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      console.log("Calling requestPermission...")
       const result = await requestPermission()
-      console.log("Permission result:", result)
 
       if (!result.granted) {
-        console.log("Permission denied")
         Alert.alert(
           "Camera Permission Required",
           "Camera access is needed to scan business cards. Please enable it in your device settings.",
@@ -61,22 +56,18 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
             {
               text: "Cancel",
               style: "cancel",
-              onPress: () => navigation.goBack(),
+              onPress: () => navigation.navigate("Main"),
             },
             {
               text: "Try Again",
-              onPress: () => {
-                // Reset and try again
-                setIsRequestingPermission(false)
-              },
+              onPress: () => setIsRequestingPermission(false),
             },
           ],
         )
-      } else {
-        console.log("Permission granted!")
       }
     } catch (error) {
-      console.error("Error requesting camera permission:", error)
+      // Silent logging - no console.error to prevent red banner
+      __DEV__ && console.log("Camera permission error:", error)
       Alert.alert("Permission Error", "There was an error requesting camera permission. Please try again.", [
         {
           text: "OK",
@@ -86,6 +77,318 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     } finally {
       setIsRequestingPermission(false)
     }
+  }
+
+  const processImageWithOpenAI = async (imageUri: string): Promise<ContactData | null> => {
+    try {
+      setProcessingStep("Analyzing image...")
+
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      })
+
+      setProcessingStep("Processing business card...")
+
+      if (!process.env.EXPO_PUBLIC_OPENAI_API_KEY) {
+        // Silent development logging
+        __DEV__ && console.log("No OpenAI API key found, returning mock data")
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+
+        return {
+          name: "John Smith",
+          title: "Senior Software Engineer",
+          company: "Tech Solutions Inc.",
+          email: "john.smith@techsolutions.com",
+          linkedinUrl: "https://linkedin.com/in/johnsmith",
+        }
+      }
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Please analyze this image and determine if it's a business card. If it is a business card, extract all contact information and return it as a JSON object with the following structure:
+{
+  "isBusinessCard": true,
+  "name": "Full name of the person",
+  "title": "Job title/position",
+  "company": "Company name",
+  "email": "Email address",
+  "phone": "Phone number",
+  "website": "Website URL",
+  "linkedin": "LinkedIn profile URL",
+  "address": "Physical address if present"
+}
+
+If this is NOT a business card (e.g., it's a photo of a person, landscape, object, etc.), return:
+{
+  "isBusinessCard": false,
+  "error": "This image does not appear to be a business card"
+}
+
+Only include fields that are clearly visible. If a field is not present or unclear, omit it from the response. Return only the JSON object, no additional text.`,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64}`,
+                    detail: "high",
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.1,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        // Silent logging for development
+        __DEV__ && console.log("OpenAI API Error Response:", errorText)
+        throw new Error(`API_ERROR_${response.status}`)
+      }
+
+      const data = await response.json()
+      const content = data.choices[0]?.message?.content
+
+      if (!content) {
+        throw new Error("NO_CONTENT_RECEIVED")
+      }
+
+      setProcessingStep("Parsing information...")
+
+      let extractedData: any
+      try {
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
+        const jsonString = jsonMatch ? jsonMatch[0] : content
+        extractedData = JSON.parse(jsonString)
+      } catch (parseError) {
+        // Silent logging for development
+        __DEV__ && console.log("Failed to parse OpenAI response:", content)
+        throw new Error("PARSE_ERROR")
+      }
+
+      // Check if it's actually a business card
+      if (!extractedData.isBusinessCard) {
+        throw new Error("NOT_BUSINESS_CARD")
+      }
+
+      const contactData: ContactData = {
+        name: extractedData.name || "",
+        title: extractedData.title || "",
+        company: extractedData.company || "",
+        email: extractedData.email || "",
+        linkedinUrl: extractedData.linkedin || extractedData.website || "",
+      }
+
+      return contactData
+    } catch (error) {
+      // Silent logging for development only
+      __DEV__ && console.log("OpenAI Vision processing error:", error)
+
+      if (error instanceof Error && error.message === "NOT_BUSINESS_CARD") {
+        throw error // Re-throw this specific error to handle it in the calling function
+      }
+
+      // For all other errors, throw a generic processing error
+      throw new Error("PROCESSING_ERROR")
+    }
+  }
+
+  const showBusinessCardError = () => {
+    Alert.alert(
+      "Not a Business Card",
+      "We couldn't detect a business card in this image. Please make sure you're scanning a clear business card with visible text.",
+      [
+        {
+          text: "Try Again",
+          style: "default",
+          onPress: () => {
+            // Reset state for retry
+            setCapturedImage(null)
+            setProcessingStep("")
+          },
+        },
+        {
+          text: "Enter Manually",
+          style: "cancel",
+          onPress: () => {
+            navigation.replace("ContactForm", {})
+          },
+        },
+      ],
+    )
+  }
+
+  const showProcessingError = () => {
+    Alert.alert(
+      "Processing Error",
+      "We're having trouble reading this image. This could be due to poor image quality, lighting, or network issues.",
+      [
+        {
+          text: "Try Again",
+          style: "default",
+          onPress: () => {
+            setCapturedImage(null)
+            setProcessingStep("")
+          },
+        },
+        {
+          text: "Enter Manually",
+          style: "cancel",
+          onPress: () => {
+            navigation.replace("ContactForm", {})
+          },
+        },
+      ],
+    )
+  }
+
+  const takePicture = async () => {
+    if (!cameraRef.current) return
+
+    setIsProcessing(true)
+    setProcessingStep("Capturing image...")
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+      })
+
+      if (photo?.uri) {
+        setCapturedImage(photo.uri)
+
+        try {
+          const extractedData = await processImageWithOpenAI(photo.uri)
+
+          if (extractedData) {
+            setIsProcessing(false)
+            navigation.replace("ContactForm", { contactData: extractedData })
+          }
+        } catch (processingError) {
+          setIsProcessing(false)
+          setCapturedImage(null)
+          setProcessingStep("")
+
+          if (processingError instanceof Error && processingError.message === "NOT_BUSINESS_CARD") {
+            showBusinessCardError()
+          } else {
+            showProcessingError()
+          }
+        }
+      }
+    } catch (error) {
+      // Silent logging for development
+      __DEV__ && console.log("Camera capture error:", error)
+      setIsProcessing(false)
+      setCapturedImage(null)
+      setProcessingStep("")
+
+      Alert.alert("Camera Error", "We couldn't take a photo. Please try again or check your camera permissions.", [
+        { text: "OK", style: "default" },
+      ])
+    }
+  }
+
+  const pickImageFromGallery = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 10],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        setIsProcessing(true)
+        setProcessingStep("Loading image...")
+        setCapturedImage(result.assets[0].uri)
+
+        try {
+          const extractedData = await processImageWithOpenAI(result.assets[0].uri)
+
+          if (extractedData) {
+            setIsProcessing(false)
+            navigation.replace("ContactForm", { contactData: extractedData })
+          }
+        } catch (processingError) {
+          setIsProcessing(false)
+          setCapturedImage(null)
+          setProcessingStep("")
+
+          if (processingError instanceof Error && processingError.message === "NOT_BUSINESS_CARD") {
+            Alert.alert(
+              "Not a Business Card",
+              "The selected image doesn't appear to be a business card. Please choose an image of a business card with clear, readable text.",
+              [
+                {
+                  text: "Choose Another",
+                  style: "default",
+                  onPress: () => pickImageFromGallery(),
+                },
+                {
+                  text: "Enter Manually",
+                  style: "cancel",
+                  onPress: () => {
+                    navigation.replace("ContactForm", {})
+                  },
+                },
+              ],
+            )
+          } else {
+            Alert.alert(
+              "Image Processing Error",
+              "We couldn't process the selected image. Please try choosing a different image or enter the contact details manually.",
+              [
+                {
+                  text: "Try Another Image",
+                  style: "default",
+                  onPress: () => pickImageFromGallery(),
+                },
+                {
+                  text: "Enter Manually",
+                  style: "cancel",
+                  onPress: () => {
+                    navigation.replace("ContactForm", {})
+                  },
+                },
+              ],
+            )
+          }
+        }
+      }
+    } catch (error) {
+      // Silent logging for development
+      __DEV__ && console.log("Image picker error:", error)
+      Alert.alert(
+        "Gallery Error",
+        "We couldn't access your photo gallery. Please check your permissions and try again.",
+        [{ text: "OK", style: "default" }],
+      )
+    }
+  }
+
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === "back" ? "front" : "back"))
+  }
+
+  const retryCapture = () => {
+    setCapturedImage(null)
+    setIsProcessing(false)
+    setProcessingStep("")
   }
 
   // Show loading while permission is being checked
@@ -105,23 +408,13 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <View style={{ flex: 1, padding: 20 }}>
-          {/* Header with back button */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 40 }}>
-            <TouchableOpacity
-              onPress={() => {
-                console.log("Back button pressed")
-                navigation.goBack()
-              }}
-              style={{
-                padding: 8, // Add padding for better touch target
-              }}
-            >
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={{ fontSize: 20, fontWeight: "600", color: colors.text, marginLeft: 16 }}>Camera Access</Text>
           </View>
 
-          {/* Permission content */}
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
             <View
               style={{
@@ -162,7 +455,6 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
               We need access to your camera to scan business cards and extract contact information automatically.
             </Text>
 
-            {/* Grant Permission Button */}
             <TouchableOpacity
               onPress={handleRequestPermission}
               disabled={isRequestingPermission}
@@ -189,14 +481,7 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
               )}
             </TouchableOpacity>
 
-            {/* Alternative back button */}
-            <TouchableOpacity
-              onPress={() => {
-                console.log("Go back text pressed")
-                navigation.goBack()
-              }}
-              style={{ padding: 12 }}
-            >
+            <TouchableOpacity onPress={() => navigation.navigate("Main")} style={{ padding: 12 }}>
               <Text
                 style={{
                   fontSize: 16,
@@ -214,207 +499,10 @@ const CameraScreen: React.FC<Props> = ({ navigation }) => {
     )
   }
 
-  const processImageWithOpenAI = async (imageUri: string): Promise<ContactData | null> => {
-    try {
-      setProcessingStep("Converting image...")
-
-      // Convert image to base64
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      })
-
-      setProcessingStep("Analyzing business card...")
-
-      // For demo purposes, let's return mock data if no API key is set
-      if (!process.env.EXPO_PUBLIC_OPENAI_API_KEY) {
-        console.log("No OpenAI API key found, returning mock data")
-        await new Promise((resolve) => setTimeout(resolve, 2000)) // Simulate processing time
-
-        return {
-          name: "John Smith",
-          title: "Senior Software Engineer",
-          company: "Tech Solutions Inc.",
-          email: "john.smith@techsolutions.com",
-          linkedinUrl: "https://linkedin.com/in/johnsmith",
-        }
-      }
-
-      // Call OpenAI Vision API with correct model name
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o", // Updated to use the correct model name
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Please extract all contact information from this business card image and return it as a JSON object with the following structure:
-{
-  "name": "Full name of the person",
-  "title": "Job title/position",
-  "company": "Company name",
-  "email": "Email address",
-  "phone": "Phone number",
-  "website": "Website URL",
-  "linkedin": "LinkedIn profile URL",
-  "address": "Physical address if present"
-}
-
-Only include fields that are clearly visible on the business card. If a field is not present or unclear, omit it from the response. Return only the JSON object, no additional text.`,
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64}`,
-                    detail: "high",
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 500,
-          temperature: 0.1,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("OpenAI API Error Response:", errorText)
-        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`)
-      }
-
-      const data = await response.json()
-      const content = data.choices[0]?.message?.content
-
-      if (!content) {
-        throw new Error("No content received from OpenAI")
-      }
-
-      setProcessingStep("Parsing information...")
-
-      // Parse the JSON response
-      let extractedData: OpenAIResponse
-      try {
-        // Clean the response in case there's extra text
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        const jsonString = jsonMatch ? jsonMatch[0] : content
-        extractedData = JSON.parse(jsonString)
-      } catch (parseError) {
-        console.error("Failed to parse OpenAI response:", content)
-        throw new Error("Failed to parse extracted information")
-      }
-
-      // Convert to ContactData format
-      const contactData: ContactData = {
-        name: extractedData.name || "",
-        title: extractedData.title || "",
-        company: extractedData.company || "",
-        email: extractedData.email || "",
-        linkedinUrl: extractedData.linkedin || extractedData.website || "",
-      }
-
-      return contactData
-    } catch (error) {
-      console.error("OpenAI Vision Error:", error)
-      throw error
-    }
-  }
-
-  const takePicture = async () => {
-    if (!cameraRef.current) return
-
-    setIsProcessing(true)
-    setProcessingStep("Capturing image...")
-
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      })
-
-      if (photo?.uri) {
-        setCapturedImage(photo.uri)
-
-        // Process the image with OpenAI Vision
-        const extractedData = await processImageWithOpenAI(photo.uri)
-
-        if (extractedData) {
-          setIsProcessing(false)
-          navigation.navigate("ContactForm", { contactData: extractedData })
-        } else {
-          throw new Error("No data could be extracted from the business card")
-        }
-      }
-    } catch (error) {
-      console.error("Error processing business card:", error)
-      Alert.alert(
-        "Processing Error",
-        "Failed to extract information from the business card. Please try again or enter details manually.",
-        [
-          { text: "Try Again", style: "default" },
-          {
-            text: "Enter Manually",
-            onPress: () => navigation.navigate("ContactForm", {}),
-          },
-        ],
-      )
-      setIsProcessing(false)
-      setCapturedImage(null)
-      setProcessingStep("")
-    }
-  }
-
-  const pickImageFromGallery = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 10],
-        quality: 0.8,
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        setIsProcessing(true)
-        setProcessingStep("Loading image...")
-        setCapturedImage(result.assets[0].uri)
-
-        const extractedData = await processImageWithOpenAI(result.assets[0].uri)
-
-        if (extractedData) {
-          setIsProcessing(false)
-          navigation.navigate("ContactForm", { contactData: extractedData })
-        }
-      }
-    } catch (error) {
-      console.error("Error picking image:", error)
-      Alert.alert("Error", "Failed to process the selected image")
-      setIsProcessing(false)
-      setCapturedImage(null)
-      setProcessingStep("")
-    }
-  }
-
-  const toggleCameraFacing = () => {
-    setFacing((current) => (current === "back" ? "front" : "back"))
-  }
-
-  const retryCapture = () => {
-    setCapturedImage(null)
-    setIsProcessing(false)
-    setProcessingStep("")
-  }
-
   if (isProcessing && capturedImage) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <View style={{ flex: 1, padding: 20 }}>
-          {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
             <TouchableOpacity onPress={retryCapture}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -433,30 +521,13 @@ Only include fields that are clearly visible on the business card. If a field is
             />
 
             <View style={{ alignItems: "center" }}>
-              <Ionicons name="sparkles" size={48} color={colors.primary} />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text, marginTop: 16 }}>
                 AI Processing...
               </Text>
               <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: "center", marginTop: 8 }}>
                 {processingStep || "Analyzing your business card with AI"}
               </Text>
-
-              {/* Animated dots */}
-              <View style={{ flexDirection: "row", marginTop: 16 }}>
-                {[0, 1, 2].map((i) => (
-                  <View
-                    key={i}
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: colors.primary,
-                      marginHorizontal: 4,
-                      opacity: 0.3,
-                    }}
-                  />
-                ))}
-              </View>
             </View>
           </Card>
         </View>
@@ -480,7 +551,7 @@ Only include fields that are clearly visible on the business card. If a field is
             flexDirection: "row",
             alignItems: "center",
             padding: 20,
-            paddingTop: 60, // Account for status bar
+            paddingTop: 60,
             backgroundColor: "rgba(0,0,0,0.3)",
             zIndex: 1,
           }}
@@ -491,7 +562,7 @@ Only include fields that are clearly visible on the business card. If a field is
           <Text style={{ fontSize: 20, fontWeight: "600", color: "#FFFFFF", marginLeft: 16 }}>Scan Business Card</Text>
         </View>
 
-        {/* Camera Overlay - Positioned absolutely over camera */}
+        {/* Camera Overlay */}
         <View
           style={{
             position: "absolute",
@@ -576,7 +647,7 @@ Only include fields that are clearly visible on the business card. If a field is
           </View>
         </View>
 
-        {/* Controls - Positioned absolutely over camera */}
+        {/* Controls */}
         <View
           style={{
             position: "absolute",

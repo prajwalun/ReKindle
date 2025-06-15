@@ -8,6 +8,7 @@ interface LocationContextType {
   location: Location.LocationObject | null
   address: string | null
   requestLocationPermission: () => Promise<boolean>
+  getCurrentLocation: () => Promise<string | null>
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined)
@@ -45,12 +46,37 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }
 
+  const getCurrentLocation = async (): Promise<string | null> => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync()
+      if (status !== "granted") {
+        return null
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({})
+      const addressResponse = await Location.reverseGeocodeAsync({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      })
+
+      if (addressResponse.length > 0) {
+        const addr = addressResponse[0]
+        return `${addr.city || ""}, ${addr.region || ""}`.trim()
+      }
+
+      return null
+    } catch (error) {
+      console.error("Error getting current location:", error)
+      return null
+    }
+  }
+
   useEffect(() => {
     requestLocationPermission()
   }, [])
 
   return (
-    <LocationContext.Provider value={{ location, address, requestLocationPermission }}>
+    <LocationContext.Provider value={{ location, address, requestLocationPermission, getCurrentLocation }}>
       {children}
     </LocationContext.Provider>
   )

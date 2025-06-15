@@ -1,13 +1,15 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { View, Text, SafeAreaView, FlatList, TouchableOpacity } from "react-native"
+import { useState, useEffect } from "react"
+import { View, Text, SafeAreaView, FlatList, TouchableOpacity, Alert, RefreshControl } from "react-native"
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { Ionicons } from "@expo/vector-icons"
 import { useTheme } from "../contexts/ThemeContext"
 import { Card } from "../components/Card"
-import type { RootStackParamList, ContactData } from "../types"
+import { getStoredContacts, deleteContact } from "../utils/storage"
+import type { RootStackParamList } from "../types"
+import type { StoredContact } from "../utils/storage"
 
 type HistoryScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "History">
 
@@ -17,57 +19,92 @@ interface Props {
 
 const HistoryScreen: React.FC<Props> = ({ navigation }) => {
   const { colors } = useTheme()
+  const [contacts, setContacts] = useState<StoredContact[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Mock data for demonstration
-  const [contacts] = useState<ContactData[]>([
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      title: "Product Manager",
-      company: "TechCorp",
-      email: "sarah@techcorp.com",
-      timestamp: "2024-06-14T10:30:00Z",
-    },
-    {
-      id: "2",
-      name: "Mike Chen",
-      title: "Software Engineer",
-      company: "StartupXYZ",
-      email: "mike@startupxyz.com",
-      timestamp: "2024-06-13T15:45:00Z",
-    },
-    {
-      id: "3",
-      name: "Emily Davis",
-      title: "Marketing Director",
-      company: "BigBrand Inc",
-      email: "emily@bigbrand.com",
-      timestamp: "2024-06-12T09:15:00Z",
-    },
-  ])
-
-  const formatDate = (timestamp?: string) => {
-    if (!timestamp) return ""
-    const date = new Date(timestamp)
-    return (
-      date.toLocaleDateString() +
-      " " +
-      date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    )
+  const loadContacts = async () => {
+    try {
+      const storedContacts = await getStoredContacts()
+      setContacts(storedContacts)
+    } catch (error) {
+      console.error("Error loading contacts:", error)
+      Alert.alert("Error", "Failed to load contacts from history")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const renderContactItem = ({ item }: { item: ContactData }) => (
-    <TouchableOpacity onPress={() => navigation.navigate("ContactForm", { contactData: item })} activeOpacity={0.8}>
-      <Card style={{ marginBottom: 12 }}>
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await loadContacts()
+    setRefreshing(false)
+  }
+
+  const handleDeleteContact = async (contactId: string) => {
+    Alert.alert("Delete Contact", "Are you sure you want to delete this contact from your history?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteContact(contactId)
+            await loadContacts()
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete contact")
+          }
+        },
+      },
+    ])
+  }
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadContacts()
+    })
+
+    return unsubscribe
+  }, [navigation])
+
+  const formatDate = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - date.getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 1) {
+      return "Today"
+    } else if (diffDays === 2) {
+      return "Yesterday"
+    } else if (diffDays <= 7) {
+      return `${diffDays - 1} days ago`
+    } else {
+      return date.toLocaleDateString()
+    }
+  }
+
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const renderContactItem = ({ item }: { item: StoredContact }) => (
+    <TouchableOpacity
+      onPress={() => navigation.navigate("ContactForm", { contactData: item })}
+      activeOpacity={0.8}
+      style={{ marginBottom: 12 }}
+    >
+      <Card style={{ padding: 16 }}>
         <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
           <View
             style={{
-              width: 50,
-              height: 50,
-              borderRadius: 25,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               backgroundColor: colors.primary,
               alignItems: "center",
               justifyContent: "center",
@@ -86,16 +123,25 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "600",
-                color: colors.text,
-                marginBottom: 4,
-              }}
-            >
-              {item.name}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "600",
+                  color: colors.text,
+                  flex: 1,
+                }}
+              >
+                {item.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleDeleteContact(item.id)}
+                style={{ padding: 4 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             {item.title && (
               <Text
@@ -121,7 +167,7 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             )}
 
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
               <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
               <Text
                 style={{
@@ -130,9 +176,51 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
                   marginLeft: 4,
                 }}
               >
-                {formatDate(item.timestamp)}
+                {formatDate(item.timestamp)} at {formatTime(item.timestamp)}
               </Text>
             </View>
+
+            {item.location && (
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+                <Ionicons name="location-outline" size={12} color={colors.textSecondary} />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    marginLeft: 4,
+                  }}
+                >
+                  {item.location}
+                </Text>
+              </View>
+            )}
+
+            {item.followUpMessage && (
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: colors.success + "20",
+                    borderRadius: 12,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: colors.success,
+                      marginLeft: 4,
+                      fontWeight: "500",
+                    }}
+                  >
+                    Follow-up generated
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -163,9 +251,19 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
               fontWeight: "600",
               color: colors.text,
               marginLeft: 16,
+              flex: 1,
             }}
           >
             Contact History
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: colors.textSecondary,
+              fontWeight: "500",
+            }}
+          >
+            {contacts.length} contacts
           </Text>
         </View>
 
@@ -174,8 +272,10 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
           <FlatList
             data={contacts}
             renderItem={renderContactItem}
-            keyExtractor={(item) => item.id || Math.random().toString()}
+            keyExtractor={(item) => item.id}
             contentContainerStyle={{ padding: 20 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            showsVerticalScrollIndicator={false}
           />
         ) : (
           <View
@@ -186,13 +286,25 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
               padding: 40,
             }}
           >
-            <Ionicons name="people-outline" size={64} color={colors.textSecondary} />
+            <View
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: colors.surface,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 24,
+              }}
+            >
+              <Ionicons name="people-outline" size={40} color={colors.textSecondary} />
+            </View>
             <Text
               style={{
-                fontSize: 18,
+                fontSize: 20,
+                fontWeight: "600",
                 color: colors.text,
                 textAlign: "center",
-                marginTop: 16,
                 marginBottom: 8,
               }}
             >
@@ -203,9 +315,10 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
                 fontSize: 16,
                 color: colors.textSecondary,
                 textAlign: "center",
+                lineHeight: 22,
               }}
             >
-              Start networking and your contacts will appear here
+              Start networking and your contacts will appear here with their follow-up messages
             </Text>
           </View>
         )}
