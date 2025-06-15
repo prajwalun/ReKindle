@@ -199,6 +199,7 @@ For additional support, please open an issue on GitHub.
 - **Team Collaboration** features
 - **Analytics Dashboard** for networking insights
 - **Multi-language Support**
+- **Follow-Up Reminders** to track next steps
 
 ## Acknowledgments
 
