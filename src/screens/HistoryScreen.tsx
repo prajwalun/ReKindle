@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { View, Text, SafeAreaView, FlatList, TouchableOpacity, Alert, RefreshControl } from "react-native"
+import { View, Text, SafeAreaView, FlatList, TouchableOpacity, Alert, RefreshControl, TextInput } from "react-native"
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
 import { Ionicons } from "@expo/vector-icons"
 import { useTheme } from "../contexts/ThemeContext"
@@ -20,6 +20,8 @@ interface Props {
 const HistoryScreen: React.FC<Props> = ({ navigation }) => {
   const { colors } = useTheme()
   const [contacts, setContacts] = useState<StoredContact[]>([])
+  const [filteredContacts, setFilteredContacts] = useState<StoredContact[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -27,6 +29,7 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
     try {
       const storedContacts = await getStoredContacts()
       setContacts(storedContacts)
+      setFilteredContacts(storedContacts)
     } catch (error) {
       console.error("Error loading contacts:", error)
       Alert.alert("Error", "Failed to load contacts from history")
@@ -39,6 +42,45 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
     setRefreshing(true)
     await loadContacts()
     setRefreshing(false)
+  }
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query)
+
+    if (!query.trim()) {
+      setFilteredContacts(contacts)
+      return
+    }
+
+    const lowercaseQuery = query.toLowerCase()
+    const filtered = contacts.filter((contact) => {
+      // Search in name (primary)
+      if (contact.name.toLowerCase().includes(lowercaseQuery)) return true
+
+      // Search in company
+      if (contact.company?.toLowerCase().includes(lowercaseQuery)) return true
+
+      // Search in title
+      if (contact.title?.toLowerCase().includes(lowercaseQuery)) return true
+
+      // Search in location
+      if (contact.location?.toLowerCase().includes(lowercaseQuery)) return true
+
+      // Search in conversation context
+      if (contact.conversationContext?.toLowerCase().includes(lowercaseQuery)) return true
+
+      // Search in email
+      if (contact.email?.toLowerCase().includes(lowercaseQuery)) return true
+
+      return false
+    })
+
+    setFilteredContacts(filtered)
+  }
+
+  const clearSearch = () => {
+    setSearchQuery("")
+    setFilteredContacts(contacts)
   }
 
   const handleDeleteContact = async (contactId: string) => {
@@ -67,6 +109,11 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
     return unsubscribe
   }, [navigation])
 
+  // Update filtered contacts when contacts change
+  useEffect(() => {
+    handleSearch(searchQuery)
+  }, [contacts])
+
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp)
     const now = new Date()
@@ -90,6 +137,15 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  const getSearchResultsText = () => {
+    if (!searchQuery.trim()) return `${contacts.length} contacts`
+
+    const count = filteredContacts.length
+    if (count === 0) return "No matches found"
+    if (count === 1) return "1 match found"
+    return `${count} matches found`
   }
 
   const renderContactItem = ({ item }: { item: StoredContact }) => (
@@ -229,6 +285,116 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
     </TouchableOpacity>
   )
 
+  const renderEmptyState = () => {
+    if (searchQuery.trim() && filteredContacts.length === 0) {
+      // No search results
+      return (
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 40,
+          }}
+        >
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: colors.surface,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 24,
+            }}
+          >
+            <Ionicons name="search-outline" size={40} color={colors.textSecondary} />
+          </View>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "600",
+              color: colors.text,
+              textAlign: "center",
+              marginBottom: 8,
+            }}
+          >
+            No matches found
+          </Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color: colors.textSecondary,
+              textAlign: "center",
+              lineHeight: 22,
+              marginBottom: 20,
+            }}
+          >
+            Try searching for a different name, company, or location
+          </Text>
+          <TouchableOpacity
+            onPress={clearSearch}
+            style={{
+              backgroundColor: colors.primary,
+              paddingHorizontal: 20,
+              paddingVertical: 10,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "600" }}>Clear Search</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+
+    // No contacts at all
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 40,
+        }}
+      >
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 24,
+          }}
+        >
+          <Ionicons name="people-outline" size={40} color={colors.textSecondary} />
+        </View>
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: "600",
+            color: colors.text,
+            textAlign: "center",
+            marginBottom: 8,
+          }}
+        >
+          No contacts yet
+        </Text>
+        <Text
+          style={{
+            fontSize: 16,
+            color: colors.textSecondary,
+            textAlign: "center",
+            lineHeight: 22,
+          }}
+        >
+          Start networking and your contacts will appear here with their follow-up messages
+        </Text>
+      </View>
+    )
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1 }}>
@@ -238,6 +404,7 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
             flexDirection: "row",
             alignItems: "center",
             padding: 20,
+            paddingBottom: 10,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
           }}
@@ -256,71 +423,91 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
           >
             Contact History
           </Text>
-          <Text
+        </View>
+
+        {/* Search Bar - Using native TextInput for better visibility */}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 16, backgroundColor: colors.background }}>
+          <View
             style={{
-              fontSize: 14,
-              color: colors.textSecondary,
-              fontWeight: "500",
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: colors.surface,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
             }}
           >
-            {contacts.length} contacts
-          </Text>
+            <Ionicons name="search-outline" size={20} color={colors.textSecondary} style={{ marginRight: 12 }} />
+
+            <TextInput
+              value={searchQuery}
+              onChangeText={handleSearch}
+              placeholder="Search by name, company, location..."
+              placeholderTextColor={colors.textSecondary}
+              style={{
+                flex: 1,
+                fontSize: 16,
+                color: colors.text,
+                paddingVertical: 4,
+              }}
+            />
+
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={clearSearch} style={{ marginLeft: 12 }}>
+                <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Search Results Counter */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 12 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: colors.textSecondary,
+                fontWeight: "500",
+              }}
+            >
+              {getSearchResultsText()}
+            </Text>
+            {searchQuery.trim() && (
+              <View
+                style={{
+                  backgroundColor: colors.primary + "15",
+                  borderRadius: 12,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  marginLeft: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: colors.primary,
+                    fontWeight: "500",
+                  }}
+                >
+                  Searching: "{searchQuery}"
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Contact List */}
-        {contacts.length > 0 ? (
+        {filteredContacts.length > 0 ? (
           <FlatList
-            data={contacts}
+            data={filteredContacts}
             renderItem={renderContactItem}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 20 }}
+            contentContainerStyle={{ padding: 20, paddingTop: 0 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             showsVerticalScrollIndicator={false}
           />
         ) : (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 40,
-            }}
-          >
-            <View
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: colors.surface,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 24,
-              }}
-            >
-              <Ionicons name="people-outline" size={40} color={colors.textSecondary} />
-            </View>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "600",
-                color: colors.text,
-                textAlign: "center",
-                marginBottom: 8,
-              }}
-            >
-              No contacts yet
-            </Text>
-            <Text
-              style={{
-                fontSize: 16,
-                color: colors.textSecondary,
-                textAlign: "center",
-                lineHeight: 22,
-              }}
-            >
-              Start networking and your contacts will appear here with their follow-up messages
-            </Text>
-          </View>
+          renderEmptyState()
         )}
       </View>
     </SafeAreaView>

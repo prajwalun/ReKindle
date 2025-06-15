@@ -13,6 +13,7 @@ interface InputProps {
   numberOfLines?: number
   required?: boolean
   keyboardType?: "default" | "email-address" | "url"
+  style?: any
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -24,6 +25,7 @@ export const Input: React.FC<InputProps> = ({
   numberOfLines = 1,
   required = false,
   keyboardType = "default",
+  style,
 }) => {
   const { colors } = useTheme()
 
@@ -43,17 +45,20 @@ export const Input: React.FC<InputProps> = ({
         </Text>
       )}
       <TextInput
-        style={{
-          backgroundColor: colors.background,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 12,
-          padding: 16,
-          fontSize: 16,
-          color: colors.text,
-          minHeight: multiline ? numberOfLines * 24 + 32 : 52,
-          textAlignVertical: multiline ? "top" : "center",
-        }}
+        style={[
+          {
+            backgroundColor: colors.background,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 12,
+            padding: 16,
+            fontSize: 16,
+            color: colors.text,
+            minHeight: multiline ? numberOfLines * 24 + 32 : 52,
+            textAlignVertical: multiline ? "top" : "center",
+          },
+          style,
+        ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
