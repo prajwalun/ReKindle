@@ -1,210 +1,126 @@
-# 🤝 Networking Assistant
+# Networking Assistant
 
-An AI-powered mobile app that transforms your networking conversations into actionable follow-ups. Scan business cards, record voice notes, and generate personalized messages with the power of OpenAI.
+A mobile app that helps you turn those awkward networking conversations into meaningful connections. Scan business cards or LinkedIn QR codes, jot down what you talked about, and get help writing follow-up messages that don't sound terrible.
 
-## ✨ Features
+## What it does
 
-### 📱 Core Functionality
+**The basics:**
 
-- **Business Card Scanning** - AI-powered OCR using OpenAI GPT-4o Vision
-- **Voice Recording & Transcription** - Hands-free conversation logging with Whisper AI
-- **Smart Follow-up Generation** - Personalized messages based on conversation context
-- **Contact History** - Searchable database of all networking contacts
-- **Location Tagging** - Automatic location capture for context
+- Scan business cards and extract contact info automatically
+- Scan LinkedIn QR codes to grab names and profile links
+- Record voice notes about your conversations (because you'll forget otherwise)
+- Generate follow-up messages that actually reference what you talked about
+- Keep track of everyone you meet with search
 
-### 🔍 Advanced Features
+**The nice-to-haves:**
 
-- **Intelligent Search** - Find contacts by name, company, title, location, or conversation topics
-- **Dark/Light Mode** - Automatic theme switching based on system preferences
-- **Offline Capability** - Works without internet (with limited AI features)
-- **Privacy-First** - All data stored locally on your device
+- Works in dark mode if that's your thing
+- Stores everything locally on your phone
+- Smart search through your contacts
+- Automatically tags where you met people
 
-### 🤖 AI-Powered
+**The AI stuff:**
 
-- **GPT-4o Vision** for business card text extraction
-- **GPT-4o** for intelligent follow-up message generation
-- **Whisper** for accurate voice-to-text transcription
-- **Context-aware messaging** that references specific conversation details
+- Uses OpenAI's GPT-4o to read business cards
+- Whisper API turns your voice notes into text
+- Generates personalized follow-up messages
+- Cleans up messy LinkedIn usernames into proper names
 
-## 🚀 Getting Started
+## Getting started
 
-### Prerequisites
+You'll need:
 
-- **Node.js** (v16 or higher)
-- **Expo CLI** (\`npm install -g expo-cli\`)
-- **iOS Simulator** or **Android Emulator** (or physical device)
-- **OpenAI API Key** (required for AI features)
+- Node.js (version 16 or newer)
+- Expo CLI (`npm install -g expo-cli`)
+- An iPhone/Android or simulator
+- OpenAI API key (this costs a few bucks but it's worth it)
 
-### Installation
+**Setup:**
 
-1. **Clone the repository**
+1. Clone this repo and install stuff:
    \`\`\`bash
-   git clone <repository-url>
+   git clone <your-repo-url>
    cd networking-assistant
-   \`\`\`
-
-2. **Install dependencies**
-   \`\`\`bash
    npm install
    \`\`\`
 
-3. **Set up environment variables**
+2. Copy the example env file and add your OpenAI key:
    \`\`\`bash
    cp .env.example .env
    \`\`\`
 
-   Edit \`.env\` and add your OpenAI API key:
+   Then edit `.env` and add:
    \`\`\`
-   EXPO_PUBLIC_OPENAI_API_KEY=sk-your_openai_api_key_here
+   EXPO_PUBLIC_OPENAI_API_KEY=sk-your_actual_key_here
    \`\`\`
 
-4. **Start the development server**
+3. Start it up:
    \`\`\`bash
    npm start
    \`\`\`
 
-5. **Run on your device**
-   - **iOS**: Press \`i\` or scan QR code with Camera app
-   - **Android**: Press \`a\` or scan QR code with Expo Go app
+4. Scan the QR code with your phone or press `i` for iOS simulator / `a` for Android
 
-## 🔧 Configuration
+## How to use it
 
-### Required Environment Variables
+**Scanning business cards:**
+Just tap "Scan Business Card" and point your camera at the card. The AI will try to extract the name, company, email, etc. Sometimes it gets things wrong, so double-check before saving.
 
-| Variable                       | Description                    | Required |
-| ------------------------------ | ------------------------------ | -------- |
-| \`EXPO_PUBLIC_OPENAI_API_KEY\` | OpenAI API key for AI features | Yes      |
+**LinkedIn QR codes:**
+Tap "Scan LinkedIn QR" and scan someone's LinkedIn QR code. You can find these in the LinkedIn app - go to any profile and tap the QR icon in the top right. The app will grab their name and profile URL, then you can fill in the rest manually.
 
-### Optional Environment Variables
+**Voice notes:**
+Hit the microphone button and just talk about what you discussed. The app will transcribe it and use that context when generating follow-up messages.
 
-| Variable                    | Description                      | Default  |
-| --------------------------- | -------------------------------- | -------- |
-| \`GOOGLE_CLOUD_KEY_FILE\`   | Google Cloud Vision API key file | Not used |
-| \`GOOGLE_CLOUD_PROJECT_ID\` | Google Cloud project ID          | Not used |
+**Follow-up messages:**
+Once you've got the contact info and some conversation context, tap "Generate Follow-Up" and the AI will write a personalized message. You can copy it and send via LinkedIn, email, whatever.
 
-### Getting Your OpenAI API Key
+**Finding people later:**
+All your contacts are saved in the History section. You can search by name, company, location, or even what you talked about.
 
-1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Sign up or log in to your account
+## Getting your OpenAI key
+
+1. Go to [platform.openai.com](https://platform.openai.com/api-keys)
+2. Sign up or log in
 3. Create a new API key
-4. Copy the key and add it to your \`.env\` file
-5. Ensure you have credits in your OpenAI account
+4. Add some credits to your account (like $5-10 should last you a while)
+5. Paste the key in your `.env` file
 
-## 📱 How to Use
+The app uses GPT-4o for business cards and message generation, plus Whisper for voice transcription. It's not free but it's pretty cheap for personal use.
 
-### 1. **Scan a Business Card**
+## Tech stuff
 
-- Tap "Scan Business Card" on the main screen
-- Position the card within the camera frame
-- AI automatically extracts contact information
-- Review and edit the extracted details
+Built with React Native and Expo because I wanted it to work on both iOS and Android without writing everything twice. Uses TypeScript because debugging JavaScript is painful.
 
-### 2. **Manual Contact Entry**
+**Main dependencies:**
 
-- Tap "Enter Contact Info" on the main screen
-- Fill in the contact details manually
-- Add conversation context via text or voice
+- React Native + Expo for the app framework
+- React Navigation for moving between screens
+- AsyncStorage to save contacts locally
+- Expo Camera for scanning
+- Expo Audio for voice recording
+- OpenAI API for the smart features
 
-### 3. **Record Voice Notes**
+## Privacy
 
-- Use the microphone button in the contact form
-- Speak about your conversation details
-- AI transcribes and adds to conversation context
+Everything stays on your phone except when calling OpenAI's API. Your contacts aren't uploaded to any cloud service or shared with anyone. The only data that leaves your device is what gets sent to OpenAI for processing (business card images, voice recordings for transcription, and text for message generation).
 
-### 4. **Generate Follow-up Messages**
+## Development
 
-- Complete the contact information
-- Tap "Generate Follow-Up"
-- AI creates a personalized message based on your conversation
-- Copy the message to send via LinkedIn, email, or text
+**Running locally:**
 
-### 5. **Search Your Contacts**
+- `npm start` - Start the dev server
+- `npm run ios` - Open iOS simulator
+- `npm run android` - Open Android emulator
 
-- Go to Contact History (clock icon)
-- Use the search bar to find contacts by:
-  - Name
-  - Company
-  - Job title
-  - Location
-  - Conversation topics
-  - Email address
+**Building for production:**
+You'll need to configure `app.json` with your app details, then use `expo build:ios` or `expo build:android`.
 
-## 🏗️ Architecture
+## Known issues
 
-### Tech Stack
+- Business card scanning works best with good lighting and clear text
+- LinkedIn QR scanning only gets basic info (name + profile URL)
+- Voice transcription requires internet connection
+- The AI sometimes generates overly formal messages (working on making them more natural)
 
-- **React Native** with Expo
-- **TypeScript** for type safety
-- **React Navigation** for screen navigation
-- **AsyncStorage** for local data persistence
-- **Expo Camera** for business card scanning
-- **Expo Audio** for voice recording
-- **Expo Location** for automatic location tagging
-
-## 🔒 Privacy & Security
-
-- **Local Storage**: All contact data is stored locally on your device
-- **No Cloud Sync**: Your contacts never leave your device (except for AI processing)
-- **API Security**: OpenAI API calls are made directly from your device
-- **Permissions**: Only requests necessary permissions (camera, microphone, location)
-
-## 🛠️ Development
-
-### Available Scripts
-
-- \`npm start\` - Start Expo development server
-- \`npm run android\` - Run on Android emulator
-- \`npm run ios\` - Run on iOS simulator
-- \`npm run web\` - Run in web browser (limited functionality)
-
-### Building for Production
-
-1. **Configure app.json** with your app details
-2. **Build for iOS**:
-   \`\`\`bash
-   expo build:ios
-   \`\`\`
-3. **Build for Android**:
-   \`\`\`bash
-   expo build:android
-   \`\`\`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
-3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
-4. Push to the branch (\`git push origin feature/amazing-feature\`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-If you encounter any issues:
-
-1. Check that your OpenAI API key is correctly configured
-2. Ensure you have sufficient credits in your OpenAI account
-3. Verify camera and microphone permissions are granted
-4. Check the console for any error messages
-
-For additional support, please open an issue on GitHub.
-
-## 🚀 Future Enhancements
-
-- **CRM Integration** (Salesforce, HubSpot, Pipedrive)
-- **Calendar Integration** for follow-up scheduling
-- **Team Collaboration** features
-- **Analytics Dashboard** for networking insights
-- **Multi-language Support**
-- **Follow-Up Reminders** to track next steps
-
-## Acknowledgments
-
-- **OpenAI** for GPT-4o and Whisper APIs
-- **Expo** for the amazing development platform
-- **React Native** community for excellent libraries
-
----
+Built this because I'm terrible at networking and needed help remembering who I talked to and what we discussed. Hope it helps you too.
