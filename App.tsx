@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary"
 import MainScreen from "./src/screens/MainScreen"
 import ContactFormScreen from "./src/screens/ContactFormScreen"
 import CameraScreen from "./src/screens/CameraScreen"
+import LinkedInQRScreen from "./src/screens/LinkedInQRScreen"
 import HistoryScreen from "./src/screens/HistoryScreen"
 import type { RootStackParamList } from "./src/types"
 
@@ -47,6 +48,14 @@ export default function App() {
                 component={CameraScreen}
                 options={{
                   animation: "slide_from_bottom", // Camera slides from bottom like iOS
+                  gestureDirection: "vertical",
+                }}
+              />
+              <Stack.Screen
+                name="LinkedInQR"
+                component={LinkedInQRScreen}
+                options={{
+                  animation: "slide_from_bottom", // QR scanner slides from bottom like iOS
                   gestureDirection: "vertical",
                 }}
               />

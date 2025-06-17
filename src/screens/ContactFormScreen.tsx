@@ -202,37 +202,39 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
   }
 
   const startRecording = async () => {
-  try {
-    const permissionResponse = await Audio.requestPermissionsAsync();
-    if (permissionResponse.status !== "granted") {
-      Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.");
-      return;
+    try {
+      const permissionResponse = await Audio.requestPermissionsAsync()
+      if (permissionResponse.status !== "granted") {
+        Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.")
+        return
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      })
+
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)
+
+      setRecording(recording)
+      setIsRecording(true)
+
+      // Start timer
+      recordingStartTime.current = Date.now()
+      setRecordingDuration(0)
+      updateRecordingDuration()
+
+      startPulseAnimation()
+    } catch (err) {
+      // Silent logging for development
+      __DEV__ && console.log("Failed to start recording", err)
+      Alert.alert(
+        "Recording Error",
+        "We couldn't start recording. Please check your microphone permissions and try again.",
+        [{ text: "OK", style: "default" }],
+      )
     }
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
-
-    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-
-    setRecording(recording);
-    setIsRecording(true);
-
-    // Start timer
-    recordingStartTime.current = Date.now();
-    setRecordingDuration(0);
-
-    // <-- ADD THIS DELAYED START
-    setTimeout(updateRecordingDuration, 500);
-
-    startPulseAnimation();
-  } catch (err) {
-    __DEV__ && console.log("Failed to start recording", err);
-    Alert.alert("Recording Error", "We couldn't start recording. Please check your microphone permissions and try again.", [{ text: "OK", style: "default" }]);
   }
-}
-
 
   const stopRecording = async () => {
     setIsRecording(false)

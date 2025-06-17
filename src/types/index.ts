@@ -2,6 +2,7 @@ export type RootStackParamList = {
   Main: undefined
   ContactForm: { contactData?: ContactData }
   Camera: undefined
+  LinkedInQR: undefined
   History: undefined
 }
 

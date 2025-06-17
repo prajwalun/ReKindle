@@ -251,8 +251,8 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
               </View>
             )}
 
-            {item.followUpMessage && (
-              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 8 }}>
+              {item.followUpMessage && (
                 <View
                   style={{
                     backgroundColor: colors.success + "20",
@@ -275,8 +275,8 @@ const HistoryScreen: React.FC<Props> = ({ navigation }) => {
                     Follow-up generated
                   </Text>
                 </View>
-              </View>
-            )}
+              )}
+            </View>
           </View>
 
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
