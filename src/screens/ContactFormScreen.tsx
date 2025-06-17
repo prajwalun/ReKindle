@@ -71,23 +71,26 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
   const waveAnim2 = useRef(new Animated.Value(0)).current
   const waveAnim3 = useRef(new Animated.Value(0)).current
 
-  // Timer update function
-  const updateRecordingDuration = () => {
-    const elapsed = Math.floor((Date.now() - recordingStartTime.current) / 1000)
-    setRecordingDuration(elapsed)
-    recordingTimeout.current = setTimeout(updateRecordingDuration, 1000)
-  }
+const updateRecordingDuration = () => {
+  const elapsed = Math.floor((Date.now() - recordingStartTime.current) / 1000);
+  setRecordingDuration(elapsed);
+  recordingTimeout.current = setTimeout(updateRecordingDuration, 1000);
+};
 
-  useEffect(() => {
-    return () => {
-      if (recordingTimeout.current) {
-        clearTimeout(recordingTimeout.current)
-      }
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {})
-      }
+useEffect(() => {
+  return () => {
+    if (recordingTimeout.current) {
+      clearTimeout(recordingTimeout.current);
+      recordingTimeout.current = null;
     }
-  }, [recording])
+
+    if (recording) {
+      recording.stopAndUnloadAsync().catch(() => {});
+    }
+  };
+}, []);
+
+
 
   const startPulseAnimation = () => {
     const pulseAnimation = Animated.loop(
@@ -201,40 +204,41 @@ const ContactFormScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }
 
-  const startRecording = async () => {
-    try {
-      const permissionResponse = await Audio.requestPermissionsAsync()
-      if (permissionResponse.status !== "granted") {
-        Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.")
-        return
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      })
-
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)
-
-      setRecording(recording)
-      setIsRecording(true)
-
-      // Start timer
-      recordingStartTime.current = Date.now()
-      setRecordingDuration(0)
-      updateRecordingDuration()
-
-      startPulseAnimation()
-    } catch (err) {
-      // Silent logging for development
-      __DEV__ && console.log("Failed to start recording", err)
-      Alert.alert(
-        "Recording Error",
-        "We couldn't start recording. Please check your microphone permissions and try again.",
-        [{ text: "OK", style: "default" }],
-      )
+const startRecording = async () => {
+  try {
+    const permissionResponse = await Audio.requestPermissionsAsync();
+    if (permissionResponse.status !== "granted") {
+      Alert.alert("Permission Required", "Please grant microphone permission to record voice notes.");
+      return;
     }
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
+    setRecording(recording);
+    setIsRecording(true);
+
+    // Start timer after slight delay (fixes zero-stuck issue)
+    recordingStartTime.current = Date.now();
+    setRecordingDuration(0);
+    setTimeout(updateRecordingDuration, 500); // 👈 KEY LINE
+
+    startPulseAnimation();
+  } catch (err) {
+    __DEV__ && console.log("Failed to start recording", err);
+    Alert.alert(
+      "Recording Error",
+      "We couldn't start recording. Please check your microphone permissions and try again.",
+      [{ text: "OK", style: "default" }]
+    );
   }
+};
+
+
 
   const stopRecording = async () => {
     setIsRecording(false)
