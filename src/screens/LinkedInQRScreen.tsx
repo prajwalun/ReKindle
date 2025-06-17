@@ -531,10 +531,6 @@ const LinkedInQRScreen: React.FC<Props> = ({ navigation }) => {
               alignItems: "center",
             }}
           >
-            <Ionicons name="logo-linkedin" size={16} color="#0077B5" />
-            <Text style={{ color: "#FFFFFF", fontSize: 12, marginLeft: 8, fontWeight: "600" }}>
-              Smart Name Extraction
-            </Text>
           </View>
 
           {/* Instructions */}
