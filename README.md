@@ -1,4 +1,4 @@
-# Networking Assistant
+# ReKindle
 
 A mobile app that helps you turn those awkward networking conversations into meaningful connections. Scan business cards or LinkedIn QR codes, jot down what you talked about, and get help writing follow-up messages that don't sound terrible.
 
